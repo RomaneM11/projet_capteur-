@@ -1,0 +1,161 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include "Adafruit_GFX.h"
+#include "Adafruit_SSD1306.h"
+
+#define SCREEN_WIDTH 128  
+#define SCREEN_HEIGHT 64  
+#define OLED_RESET -1         
+#define SCREEN_ADDRESS 0x3C   
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+const int buttonPin1 = 3;       
+const int pulseInputPin = 2;  
+const int pulseOutputPin = 6;
+const int analogInputPin = A0;  // Mesure de la tension (générateur de tension)
+const int currentInputPin = A1; // Mesure du courant 4-20mA
+const int potPin = A2;  // Générateur de tension 0-10V
+const int currentGenPin = A3; // 🆕 Lecture du courant généré (via 250Ω)
+
+const float shuntResistor = 240.0;
+float analogVoltage = 0.0;
+float current_mA = 0.0;
+float potVoltage = 0.0;
+float generatedCurrent_mA = 0.0; // 🆕 Courant généré par le potentiomètre
+
+volatile int pulseCount = 0; 
+unsigned long lastMeasurementTime = 0;
+const unsigned long measurementInterval = 1000;
+
+volatile bool buttonPressed = false;  
+unsigned long lastButtonPressTime = 0;
+const unsigned long debounceDelay = 200;
+
+int displayMode = 0;  // 0 = fréquence, 1 = tension, 2 = courant 4-20mA, 3 = générateur de tension, 4 = courant généré
+
+void buttonISR1();
+void pulseISR();
+void generatePulse();
+void updateDisplay();
+void measureValues();
+
+void setup() {
+    Serial.begin(9600);
+    if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+        Serial.println(F("Échec de l'initialisation de l'écran OLED !"));
+        for (;;);
+    }
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setTextColor(SSD1306_WHITE);
+
+    pinMode(buttonPin1, INPUT_PULLUP);
+    pinMode(pulseInputPin, INPUT_PULLUP);
+    pinMode(pulseOutputPin, OUTPUT);
+    attachInterrupt(digitalPinToInterrupt(buttonPin1), buttonISR1, FALLING);
+    attachInterrupt(digitalPinToInterrupt(pulseInputPin), pulseISR, FALLING);
+}
+
+void loop() {
+    generatePulse();
+
+    unsigned long currentTime = millis();
+    if (currentTime - lastMeasurementTime >= measurementInterval) {
+        noInterrupts();
+        pulseCount = 0;
+        lastMeasurementTime = currentTime;
+        interrupts();
+
+        measureValues();
+        updateDisplay();
+    }
+
+    if (buttonPressed) {
+        buttonPressed = false;
+        displayMode = (displayMode + 1) % 5;  // 🆕 Ajout affichage générateur de courant
+        updateDisplay();
+    }
+}
+
+void buttonISR1() {
+    unsigned long currentTime = millis();
+    if (currentTime - lastButtonPressTime > debounceDelay) {
+        buttonPressed = true;
+        lastButtonPressTime = currentTime;
+    }
+}
+
+void pulseISR() {
+    pulseCount++;  
+}
+
+void generatePulse() {
+    static unsigned long lastPulseGenTime = 0;
+    static bool pulseState = false;
+    unsigned long currentTime = millis();
+
+    if (pulseState && currentTime - lastPulseGenTime >= 75) {
+        digitalWrite(pulseOutputPin, LOW);
+        pulseState = false;
+        lastPulseGenTime = currentTime;
+    } else if (!pulseState && currentTime - lastPulseGenTime >= 75) {
+        digitalWrite(pulseOutputPin, HIGH);
+        pulseState = true;
+        lastPulseGenTime = currentTime;
+    }
+}
+
+void measureValues() {
+    int rawVoltage = analogRead(analogInputPin);
+    analogVoltage = rawVoltage * (5.0 / 1023.0);  
+
+    int rawCurrent = analogRead(currentInputPin);
+    float voltageAcrossShunt = rawCurrent * (5.0 / 1023.0);
+    current_mA = (voltageAcrossShunt / shuntResistor) * 1000.0;
+
+    int rawPot = analogRead(potPin);  // 🆕 Lecture du générateur de tension
+    potVoltage = rawPot * (10.0 / 1023.0);  // 🆕 Conversion en 0-10V
+
+    int rawCurrentGen = analogRead(currentGenPin);  // 🆕 Lecture du générateur de courant
+    float voltageAcross250 = rawCurrentGen * (5.0 / 1023.0);
+    generatedCurrent_mA = (voltageAcross250 / 250.0) * 1000.0; // 🆕 Calcul du 4-20mA
+}
+
+void updateDisplay() {
+    display.clearDisplay();
+    display.setCursor(0, 20);
+    display.setTextSize(2);
+
+    if (displayMode == 0) {  
+        display.println(F("Freq:"));
+        display.setCursor(0, 40);
+        display.print(pulseCount);
+        display.println(F(" Hz"));
+    } 
+    else if (displayMode == 1) {  
+        display.println(F("Voltage:"));
+        display.setCursor(0, 40);
+        display.print(analogVoltage, 2);
+        display.println(F(" V"));
+    } 
+    else if (displayMode == 2) {  
+        display.println(F("Courant:"));
+        display.setCursor(0, 40);
+        display.print(current_mA, 1);
+        display.println(F(" mA"));
+    }
+    else if (displayMode == 3) {  // 🆕 Affichage générateur de tension
+        display.println(F("Gen 0-10V:"));
+        display.setCursor(0, 40);
+        display.print(potVoltage, 2);
+        display.println(F(" V"));
+    }
+    else if (displayMode == 4) {  // 🆕 Affichage générateur de courant
+        display.println(F("Gen 4-20mA:"));
+        display.setCursor(0, 40);
+        display.print(generatedCurrent_mA, 1);
+        display.println(F(" mA"));
+    }
+
+    display.display();
+}
