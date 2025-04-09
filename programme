@@ -15,13 +15,13 @@ const int pulseOutputPin = 6;
 const int analogInputPin = A0;  // Mesure de la tension (générateur de tension)
 const int currentInputPin = A1; // Mesure du courant 4-20mA
 const int potPin = A2;  // Générateur de tension 0-10V
-const int currentGenPin = A3; // 🆕 Lecture du courant généré (via 250Ω)
+const int currentGenPin = A3; // Lecture du courant généré (via 250Ω)
 
 const float shuntResistor = 240.0;
 float analogVoltage = 0.0;
 float current_mA = 0.0;
 float potVoltage = 0.0;
-float generatedCurrent_mA = 0.0; // 🆕 Courant généré par le potentiomètre
+float generatedCurrent_mA = 0.0; //Courant généré par le potentiomètre
 
 volatile int pulseCount = 0; 
 unsigned long lastMeasurementTime = 0;
@@ -72,7 +72,7 @@ void loop() {
 
     if (buttonPressed) {
         buttonPressed = false;
-        displayMode = (displayMode + 1) % 5;  // 🆕 Ajout affichage générateur de courant
+        displayMode = (displayMode + 1) % 5;  // Ajout affichage générateur de courant
         updateDisplay();
     }
 }
@@ -113,12 +113,12 @@ void measureValues() {
     float voltageAcrossShunt = rawCurrent * (5.0 / 1023.0);
     current_mA = (voltageAcrossShunt / shuntResistor) * 1000.0;
 
-    int rawPot = analogRead(potPin);  // 🆕 Lecture du générateur de tension
-    potVoltage = rawPot * (10.0 / 1023.0);  // 🆕 Conversion en 0-10V
+    int rawPot = analogRead(potPin);  //  Lecture du générateur de tension
+    potVoltage = rawPot * (10.0 / 1023.0);  //  Conversion en 0-10V
 
-    int rawCurrentGen = analogRead(currentGenPin);  // 🆕 Lecture du générateur de courant
+    int rawCurrentGen = analogRead(currentGenPin);  //  Lecture du générateur de courant
     float voltageAcross250 = rawCurrentGen * (5.0 / 1023.0);
-    generatedCurrent_mA = (voltageAcross250 / 250.0) * 1000.0; // 🆕 Calcul du 4-20mA
+    generatedCurrent_mA = (voltageAcross250 / 250.0) * 1000.0; // Calcul du 4-20mA
 }
 
 void updateDisplay() {
@@ -144,13 +144,13 @@ void updateDisplay() {
         display.print(current_mA, 1);
         display.println(F(" mA"));
     }
-    else if (displayMode == 3) {  // 🆕 Affichage générateur de tension
+    else if (displayMode == 3) {  // Affichage générateur de tension
         display.println(F("Gen 0-10V:"));
         display.setCursor(0, 40);
         display.print(potVoltage, 2);
         display.println(F(" V"));
     }
-    else if (displayMode == 4) {  // 🆕 Affichage générateur de courant
+    else if (displayMode == 4) {  // Affichage générateur de courant
         display.println(F("Gen 4-20mA:"));
         display.setCursor(0, 40);
         display.print(generatedCurrent_mA, 1);
